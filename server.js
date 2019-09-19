@@ -62,7 +62,7 @@ io.on('connection', socket => {
     doc.head = doc.head + 1;
     doc.changesets.push({changeset: changeset, revNum: doc.head});
     // 发送消息
-    console.log('after sync event', doc);
+    console.log('after sync event', doc.head, doc.atext, doc.pool, doc.changesets.length);
     console.log(changeset);
     socket.to(room({docId})).emit('userChange', { docId, changeset, pool: doc.pool, revNum: doc.head });
     socket.emit('syncAck', {docId, revNum: doc.head, });
