@@ -4,7 +4,7 @@ import { Button } from "antd";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css"; // ES6
 // with ES6 import
-// import React, { useState, useEffect, useRef } from "react";
+import React from "react";
 // import { Delta } from "quill";
 import Delta from "quill-delta";
 const Changeset = require('../utils/Changeset');
@@ -93,6 +93,13 @@ function cs2delta({cs, pool}) {
 //     height: 315
 //   }
 // }
+
+// baseRev
+// 0:
+// "Z:bj<4i|2=m|3-5p*0+17$Register a new handler for the given event."
+// 1:
+// "Z:71>4i|2=m-17|3+5p$This pad text is synchronized as you type, so that everyone viewing this page sees the same text. This allows you to collaborate seamlessly on documents!↵↵Get involved with Etherpad at http://etherpad.org↵"
+
 /**
  *
  *
