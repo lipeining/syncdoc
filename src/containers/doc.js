@@ -53,6 +53,7 @@ function cs2delta({cs, pool}) {
   const bankIter = Changeset.stringIterator(unpacked.charBank);
   while(csIter.hasNext()) {
     const op = csIter.next();
+    // op.attribs 表示这个操作的属性
     switch (op.opcode) {
       case '+':
         delta.insert(bankIter.take(op.chars));
@@ -146,6 +147,48 @@ function delta2cs({ delta, oldLen,  pool }) {
   }
   return Changeset.pack(oldLen, newLen, opsStr, bank);
 }
+/**
+ *
+ *
+ * @param {*} { delta, oldFullText, pool }
+ */
+function delta2csLines({ delta, oldFullText, oldLen, pool }) {
+  // 理论所知：每一个 cs 都需要有基本的 olFullText, 也是在这里计算对应的 行数变动
+  const assem =  Changeset.smartOpAssembler();
+  const textIter = Changeset.stringIterator(oldFullText);
+  // function appendOpWithText(opcode, text, attribs, pool){}
+  // let newLen = oldLen;
+  let newLen = oldLen;
+  let bank=''; // from insert
+  console.log('oldFullText.length: oldLen', oldFullText.length, oldLen);
+  console.log(delta, oldFullText, oldLen);
+  for(const op of delta.ops) {
+    if (op.retain) {
+      if (op.attributes) {
+      }
+      const text = textIter.take(op.retain);
+      assem.appendOpWithText('=', text);
+    } else if (op.insert) {
+      if (op.attributes) {
+      }
+      const text = op.insert;
+      assem.appendOpWithText('+', text);
+      newLen += op.insert.length;
+      bank += op.insert;
+    } else if (op.delete) {
+      const text = textIter.take(op.delete);
+      assem.appendOpWithText('-', text);
+      newLen -= op.delete;
+    } else {
+      console.log(`wrong op: ${JSON.stringify(op)}`);
+    } 
+  }
+  assem.endDocument();
+  const ops = assem.toString();
+  console.log('assem', ops);
+  return Changeset.pack(oldLen, newLen, ops, bank);
+}
+
 // onChange(content, delta, source, editor) : Called back with the new contents of the editor after change. It will be passed the HTML contents of the editor, 
 // a delta object expressing the change, the source of the change, and finally a read-only proxy to editor accessors such as getHTML().
 // warning Do not use this delta object as value, as it will cause a loop. Use editor.getContents() instead. See Using Deltas for details.
@@ -183,6 +226,7 @@ class Editor extends React.Component {
     this._baseRev = -1;
     this.attachEvent(this.socket);
     this._initOK = false;
+    this._YoldFullText = '';
   }
   attachEvent(socket) {
     socket.on("connect", () => {
@@ -240,10 +284,13 @@ class Editor extends React.Component {
       // 当前的视图，应该是 D 的 cs2delta
       // 此时需要更新本地的 pool 吗
       this._pool = apool;
-      console.log('user change revNum, baseRev', revNum, this._baseRev);
+      console.log('user change revNum, baseRev:', revNum, this._baseRev);
       this._baseRev = revNum;
       const delta = cs2delta({cs: D, pool: this._pool});
       this.quillRef.updateContents(delta, 'silent');
+      const currentText = this.quillRef.getText();
+      this._YoldFullText = currentText;
+      console.log('user change y old full text:', this._YoldFullText);
     })
   }
   /**
@@ -293,12 +340,13 @@ class Editor extends React.Component {
       console.log('already init ok');
       return;
     }
+    const text = doc.atext.text;
     // console.log(this.reactQuillRef);
     // console.log(this.quillRef);
-    // this.quillRef.setText(doc.atext.text, 'silent');
+    // this.quillRef.setText(text, 'silent');
     this.initA({doc});
-    this.initX({length: doc.atext.text.length});
-    this.initY({length: doc.atext.text.length});
+    this.initX({length: text.length});
+    this.initY({length: text.length});
     this._pool = (new AttributePool()).fromJsonable(doc.pool);
     this._baseRev = doc.head;
     const delta = cs2delta({ cs: this.A, pool: this._pool});
@@ -306,6 +354,7 @@ class Editor extends React.Component {
     this.debugAXY();
     this.quillRef.setContents(delta, 'slient');
     this._initOK = true;
+    this._YoldFullText = text;
   }
   async fetchData() {
     this.socket.emit("initDoc", this.docId);
@@ -354,6 +403,7 @@ class Editor extends React.Component {
     console.log('Y:', this.Yunpacked, this.Y);
     console.log('pool', this._pool);
     console.log('baseRev', this._baseRev);
+    console.log('YoldFullText', this._YoldFullText);
   }
   onChange(content, delta, source, editor) {
     // console.log(editor);
@@ -372,12 +422,14 @@ class Editor extends React.Component {
     this.debugAXY();
     // 这里视图上已经渲染了最新的编辑 delta， 需要同步到 Y 上 Y <- YE
     const YnewLen = this.Yunpacked.newLen;
-    const E = delta2cs({ delta, oldLen: YnewLen, pool: this._pool });
+    // const E = delta2cs({ delta, oldLen: YnewLen, pool: this._pool });
+    const E = delta2csLines({ delta, oldFullText: this._YoldFullText, oldLen: YnewLen, pool: this._pool });
     console.log('当前delta的cs', delta, E);
     // 合并 Y and E
     this.Y = this.composeYE({Y: this.Y, E, pool: this._pool});
     this.Yunpacked = Changeset.unpack(this.Y);
     const YEText = editor.getText();
+    this._YoldFullText = YEText;
     console.log('Y and YETex', this.Yunpacked, YEText);
   }
   
@@ -416,6 +468,12 @@ const DocContainer = () => {
   return (
     <div className={styles.normal}>
       <Editor className={styles.doc} docId={docId} socket={socket} />
+      {/* <ReactQuill 
+          theme={'snow'} 
+          onChange={(content, delta, source)=>{
+            console.log(delta);
+          }}  
+        /> */}
     </div>
   );
 };

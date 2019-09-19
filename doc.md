@@ -1,4 +1,12 @@
-http://slix.rocks/%E5%9C%A8%E7%BA%BF%E6%96%87%E6%A1%A3%E4%B8%AD-easysync2-%E7%AE%97%E6%B3%95%E4%BB%8B%E7%BB%8D/
+# 多行模式
+
+在没有合适的转化时，参考石墨文档和腾讯文档，如何将 delta 转为对应的 cs, atext
+
+重点在于使用 Changeset.smartOpAssembler() 对象，但是，有一点不好的是：
+这里需要整一个旧的文档内容，计算对应的 op 的值：比如行数，同时合并对应的 cs,这里可能会耗费较多的计算资源
+怎样才能够使用 quill-delta 的文档描述呢？
+为什么这个 op.lines 这么重要呢？需要查看源代码进行分析，如何改为无 op.lines 或者 op.lines 永远为 0 的程序才是关键，
+如果没有行数概念，可以直接翻译 delta 中的 retain,insert,delete 即可，这里只要保证符合两者要求即可。
 
 最简单的是：follow ver->current ver
 applyToText 即可。
