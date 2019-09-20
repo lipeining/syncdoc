@@ -39,12 +39,16 @@ const FORMATS = [
 ];
 // 基本原则是：与服务器的沟通都用 cs, 本地需要在合理处理 cs 的 compose, follow 之后，
 // 得到需要执行的 delta，通过 quill 来更新文档内容。
-// let char = 'abcdefghijklmnopqrstuvwxyz';
-// char += `\n${char.toUpperCase()}`;
-// const number =  '\n0123456789\n';
-// const sign = '!@#$%^&*()';
-// const STR = char + number + sign;
-const STR = "abcdefghijklmnopqrstuvwxyz";
+
+let char = "abcdefghijklmnopqrstuvwxyz";
+char += `${char.toUpperCase()}`;
+const number = "0123456789";
+const sign = "!@#$%^&*()";
+const STR = char + number + sign;
+// const STR = 'abcdefghijklmnopqrstuvwxyz';
+function random(min, max) {
+  return Math.floor(Math.random() * (max - min)) + min;
+}
 /**
  *
  *
@@ -439,7 +443,7 @@ class Editor extends React.Component {
   }
   mockInput() {
     clearTimeout(this._genE);
-    this._genETime = Math.floor(Math.random() * 300) + 100;
+    this._genETime = random(100, 500);
     this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
     // 200ms - 800ms 之间
     if (!this._initOK) {
@@ -450,10 +454,20 @@ class Editor extends React.Component {
     console.log("mock input: ", delta);
   }
   genDelta() {
-    const retain = Math.ceil(this._YoldFullText.length / 2);
-    const start = Math.ceil(STR.length / Math.random() / 10);
-    const insert = STR.slice(start);
+    // 1/3 - 1/2 随机插入 insert 个
+    const retain = random(
+      Math.ceil(this._YoldFullText.length / 3),
+      Math.ceil(this._YoldFullText.length / 2)
+    );
+    const start = random(0, STR.length);
+    const end = random(0, STR.length);
+    let insert = STR.slice(start, end) || "insert";
     const delta = new Delta();
+    const hasLine = Math.random() > 0.5;
+    if (hasLine && insert.length >= 2) {
+      const mid = Math.floor(insert.length / 2);
+      insert = insert.slice(0, mid) + "\n" + insert.slice(mid);
+    }
     if (retain > 0) {
       delta.retain(retain);
     }
