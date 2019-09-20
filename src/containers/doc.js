@@ -39,7 +39,12 @@ const FORMATS = [
 ];
 // 基本原则是：与服务器的沟通都用 cs, 本地需要在合理处理 cs 的 compose, follow 之后，
 // 得到需要执行的 delta，通过 quill 来更新文档内容。
-
+// let char = 'abcdefghijklmnopqrstuvwxyz';
+// char += `\n${char.toUpperCase()}`;
+// const number =  '\n0123456789\n';
+// const sign = '!@#$%^&*()';
+// const STR = char + number + sign;
+const STR = 'abcdefghijklmnopqrstuvwxyz';
 /**
  *
  *
@@ -161,7 +166,7 @@ function delta2csLines({ delta, oldFullText, oldLen, pool }) {
   let newLen = oldLen;
   let bank=''; // from insert
   console.log('oldFullText.length: oldLen', oldFullText.length, oldLen);
-  console.log(delta, oldFullText, oldLen);
+  console.log(delta, oldLen);
   for(const op of delta.ops) {
     if (op.retain) {
       if (op.attributes) {
@@ -227,6 +232,9 @@ class Editor extends React.Component {
     this.attachEvent(this.socket);
     this._initOK = false;
     this._YoldFullText = '';
+    // for test 
+    this._genE = null;
+    this._genETime = 500;
   }
   attachEvent(socket) {
     socket.on("connect", () => {
@@ -243,12 +251,14 @@ class Editor extends React.Component {
     socket.on("error", error => {
       // ...
       console.log(error);
+      this._initOK = false;
     });
     socket.on("disconnect", reason => {
       if (reason === "io server disconnect") {
         // the disconnection was initiated by the server, you need to reconnect manually
-        socket.connect();
+        // socket.connect();
       }
+      this._initOK = false;
       // else the socket will automatically try to reconnect
     });
     socket.on("reconnect", attemptNumber => {
@@ -260,37 +270,49 @@ class Editor extends React.Component {
       // 监听到 ack
       // A <- AX
       // X <- identity
-      const {docId, revNum } = data;
-      this.A = Changeset.compose(this.A, this.X);
-      console.log('sync ack revNum, baseRev', revNum, this._baseRev);
-      this._baseRev = revNum;
-      this.initX({length: this.Xunpacked.newLen});
+      try {
+        const {docId, revNum } = data;
+        this.A = Changeset.compose(this.A, this.X);
+        console.log('sync ack revNum, baseRev', revNum, this._baseRev);
+        this._baseRev = revNum;
+        this.initX({length: this.Xunpacked.newLen});
+      } catch (err) {
+        console.log(err);
+        this._initOK = false;
+      }
     });
     socket.on('userChange', (data)=>{
-      const {docId, changeset, pool, revNum }=data;
-      // 从服务器得到了 B，需要计算出对应的 ops 并且 silent 更新 editor
-      const apool = (new AttributePool()).fromJsonable(pool);
-      const Api = Changeset.compose(this.A, changeset, apool);
-      const Xpi = Changeset.follow(changeset, this.X, false, apool);
-      const Bpi = Changeset.follow(this.X, changeset,false, apool)
-      const Ypi = Changeset.follow(Bpi, this.Y, false, apool);
-      const D = Changeset.follow(this.Y, Bpi, false, apool);
-      this.A = Api;
-      this.Aunpacked = Changeset.unpack(this.A);
-      this.X = Xpi;
-      this.Xunpacked = Changeset.unpack(this.X);
-      this.Y = Ypi;
-      this.Yunpacked = Changeset.unpack(this.Y);
-      // 当前的视图，应该是 D 的 cs2delta
-      // 此时需要更新本地的 pool 吗
-      this._pool = apool;
-      console.log('user change revNum, baseRev:', revNum, this._baseRev);
-      this._baseRev = revNum;
-      const delta = cs2delta({cs: D, pool: this._pool});
-      this.quillRef.updateContents(delta, 'silent');
-      const currentText = this.quillRef.getText();
-      this._YoldFullText = currentText;
-      console.log('user change y old full text:', this._YoldFullText);
+      try {
+        const {docId, changeset, pool, revNum }=data;
+        // 从服务器得到了 B，需要计算出对应的 ops 并且 silent 更新 editor
+        const apool = (new AttributePool()).fromJsonable(pool);
+        const Api = Changeset.compose(this.A, changeset, apool);
+        const Xpi = Changeset.follow(changeset, this.X, false, apool);
+        const Bpi = Changeset.follow(this.X, changeset,false, apool)
+        const Ypi = Changeset.follow(Bpi, this.Y, false, apool);
+        const D = Changeset.follow(this.Y, Bpi, false, apool);
+        this.A = Api;
+        this.Aunpacked = Changeset.unpack(this.A);
+        this.X = Xpi;
+        this.Xunpacked = Changeset.unpack(this.X);
+        this.Y = Ypi;
+        this.Yunpacked = Changeset.unpack(this.Y);
+        // 当前的视图，应该是 D 的 cs2delta
+        // 此时需要更新本地的 pool 吗
+        this._pool = apool;
+        console.log('user change revNum, baseRev:', changeset, revNum, this._baseRev);
+        console.log('user change X, Y:', this.X, this.Y);
+        this._baseRev = revNum;
+        const delta = cs2delta({cs: D, pool: this._pool});
+        this.quillRef.updateContents(delta, 'silent');
+        const currentText = this.quillRef.getText();
+        this._YoldFullText = currentText;
+        console.log('user change y old full text:', this._YoldFullText.length);
+      } catch (err) {
+        console.log(err);
+        this._initOK = false;
+      }
+
     })
   }
   /**
@@ -341,16 +363,12 @@ class Editor extends React.Component {
       return;
     }
     const text = doc.atext.text;
-    // console.log(this.reactQuillRef);
-    // console.log(this.quillRef);
-    // this.quillRef.setText(text, 'silent');
     this.initA({doc});
     this.initX({length: text.length});
     this.initY({length: text.length});
     this._pool = (new AttributePool()).fromJsonable(doc.pool);
     this._baseRev = doc.head;
     const delta = cs2delta({ cs: this.A, pool: this._pool});
-    console.log('initDoc');
     this.debugAXY();
     this.quillRef.setContents(delta, 'slient');
     this._initOK = true;
@@ -367,6 +385,10 @@ class Editor extends React.Component {
       });
     });
   }
+  componentWillUnmount() {
+    clearTimeout(this.sendServerY);
+    clearTimeout(this._genE);
+  }
   componentDidMount() {
     this.fetchData();
     this.attachQuillRefs();
@@ -378,7 +400,7 @@ class Editor extends React.Component {
       if (!this._initOK) {
         return;
       }
-      if (this.Y === '' || Changeset.isIdentity(this.Y)) {
+      if (this.Y === '' || Changeset.isIdentity(this.Y) || !Changeset.isIdentity(this.X)) {
         return;
       }
       this.socket.emit('syncEvent', {changeset: this.Y, pool: this._pool, docId: this.docId, baseRev: this._baseRev});
@@ -387,6 +409,32 @@ class Editor extends React.Component {
       // 现在 Y 的长度应该是 newLen
       this.initY({ length: this.Yunpacked.newLen});
     }, 500);
+    this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
+  }
+  mockInput() {
+    clearTimeout(this._genE);
+    this._genETime = Math.floor(Math.random()*300) + 100;
+    this._genE = setTimeout(this.mockInput.bind(this), this._genETime); 
+    // 200ms - 800ms 之间
+     if (!this._initOK) {
+      return;
+    }
+    const delta = this.genDelta();
+    this.quillRef.updateContents(delta, 'user');
+    console.log('mock input: ', delta);
+  }
+  genDelta() {
+    const retain = Math.ceil(this._YoldFullText.length / 2);
+    const start = Math.ceil(STR.length / Math.random() / 10);
+    const insert = STR.slice(start);
+    const delta = new Delta();
+    if (retain > 0){
+      delta.retain(retain)
+    }
+    if (insert) {
+      delta.insert(insert);
+    }
+    return delta;
   }
   
   componentDidUpdate() {
@@ -398,39 +446,35 @@ class Editor extends React.Component {
     this.quillRef = this.reactQuillRef.getEditor();
   }
   debugAXY() {
-    console.log('A:', this.Aunpacked, this.A);
-    console.log('X:', this.Xunpacked, this.X);
-    console.log('Y:', this.Yunpacked, this.Y);
+    console.log('A:', this.Aunpacked, this.A.length);
+    console.log('X:', this.Xunpacked, this.X.length);
+    console.log('Y:', this.Yunpacked, this.Y.length);
     console.log('pool', this._pool);
     console.log('baseRev', this._baseRev);
-    console.log('YoldFullText', this._YoldFullText);
+    console.log('YoldFullText', this._YoldFullText.length);
   }
   onChange(content, delta, source, editor) {
-    // console.log(editor);
-    // console.log(this.quillRef);
-    // console.log(editor.getText());
-    // console.log(content);
-    // console.log(source); // user client(silent)
-    // console.log(editor);
-    // const c = editor.getContents();
-    // console.log(c);
-    // 这里不能使用 updateContents 更新 text, 导致 loop。
-    if (source!=='user') {
-      return;
+    try {
+      // 这里不能使用 updateContents 更新 text, 导致 loop。
+      if (source!=='user') {
+        return;
+      }
+      this.debugAXY();
+      // 这里视图上已经渲染了最新的编辑 delta， 需要同步到 Y 上 Y <- YE
+      const YnewLen = this.Yunpacked.newLen;
+      // const E = delta2cs({ delta, oldLen: YnewLen, pool: this._pool });
+      const E = delta2csLines({ delta, oldFullText: this._YoldFullText, oldLen: YnewLen, pool: this._pool });
+      console.log('当前delta的cs', delta, E);
+      // 合并 Y and E
+      this.Y = this.composeYE({Y: this.Y, E, pool: this._pool});
+      this.Yunpacked = Changeset.unpack(this.Y);
+      const YEText = editor.getText();
+      this._YoldFullText = YEText;
+      console.log('Y and YETex', this.Yunpacked, YEText.length);
+    } catch (err) {
+      console.log(err);
+      this._initOK = false;
     }
-    console.log(delta);
-    this.debugAXY();
-    // 这里视图上已经渲染了最新的编辑 delta， 需要同步到 Y 上 Y <- YE
-    const YnewLen = this.Yunpacked.newLen;
-    // const E = delta2cs({ delta, oldLen: YnewLen, pool: this._pool });
-    const E = delta2csLines({ delta, oldFullText: this._YoldFullText, oldLen: YnewLen, pool: this._pool });
-    console.log('当前delta的cs', delta, E);
-    // 合并 Y and E
-    this.Y = this.composeYE({Y: this.Y, E, pool: this._pool});
-    this.Yunpacked = Changeset.unpack(this.Y);
-    const YEText = editor.getText();
-    this._YoldFullText = YEText;
-    console.log('Y and YETex', this.Yunpacked, YEText);
   }
   
   render() {
@@ -445,6 +489,7 @@ class Editor extends React.Component {
           haha
         </Button>
         <ReactQuill 
+          // readOnly={true}
           ref={(el) => { this.reactQuillRef = el }}
           theme={'snow'} 
           modules={this.modules}
@@ -460,7 +505,7 @@ const DocContainer = () => {
   const port = socketConfig.port;
   const ioUrl = `${window.location.protocol}//${window.location.hostname}:${port}/`;
   console.log(ioUrl);
-  const socket = io(ioUrl);
+  const socket = io(ioUrl, { reconnection: false });
   socket.on("connect", () => {
     console.log(`container: ${socket.id}`);
   });
