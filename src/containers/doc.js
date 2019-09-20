@@ -233,9 +233,20 @@ class Editor extends React.Component {
     this.attachEvent(this.socket);
     this._initOK = false;
     this._YoldFullText = "";
+    // for state
+    this._state = 'none'; // none init syncAcking following composing sending
+    this._stateErr = [];
     // for test
     this._genE = null;
     this._genETime = 500;
+  }
+  checkStateErr({expectStates = []}) {
+    if (!expectStates.includes(this._state)) {
+      this.genStateErrMsg({expectStates});
+    }
+  }
+  genStateErrMsg({expectStates = []}) {
+    this._stateErr.push(`expect: ${expectStates}, actual: ${this._state}`);
   }
   attachEvent(socket) {
     socket.on("connect", () => {
@@ -272,6 +283,8 @@ class Editor extends React.Component {
       // A <- AX
       // X <- identity
       try {
+        this.checkStateErr({expectStates: ['init']});
+        this._state = 'syncAcking';
         const { docId, revNum } = data;
         this.A = Changeset.compose(
           this.A,
@@ -280,6 +293,7 @@ class Editor extends React.Component {
         console.log("sync ack revNum, baseRev", revNum, this._baseRev);
         this._baseRev = revNum;
         this.initX({ length: this.Xunpacked.newLen });
+        this._state = 'init';
       } catch (err) {
         console.log(err);
         this._initOK = false;
@@ -287,6 +301,8 @@ class Editor extends React.Component {
     });
     socket.on("userChange", data => {
       try {
+        this.checkStateErr({expectStates: ['init']});
+        this._state = 'following';
         const { docId, changeset, pool, revNum } = data;
         // 从服务器得到了 B，需要计算出对应的 ops 并且 silent 更新 editor
         const apool = new AttributePool().fromJsonable(pool);
@@ -321,6 +337,7 @@ class Editor extends React.Component {
         const currentText = this.quillRef.getText();
         this._YoldFullText = currentText;
         console.log("user change y old full text:", this._YoldFullText.length);
+        this._state = 'init';
       } catch (err) {
         console.log(err);
         this._initOK = false;
@@ -383,6 +400,7 @@ class Editor extends React.Component {
       console.log("already init ok");
       return;
     }
+    this.checkStateErr({expectStates: ['none']});
     const text = doc.atext.text;
     this.initA({ doc });
     this.initX({ length: text.length });
@@ -394,6 +412,7 @@ class Editor extends React.Component {
     this.quillRef.setContents(delta, "slient");
     this._initOK = true;
     this._YoldFullText = text;
+    this._state = 'init';
   }
   async fetchData() {
     this.socket.emit("initDoc", this.docId);
@@ -428,6 +447,8 @@ class Editor extends React.Component {
       ) {
         return;
       }
+      this.checkStateErr({expectStates: ['init']});
+      this._state = 'sending';
       this.socket.emit("syncEvent", {
         changeset: this.Y,
         pool: this._pool,
@@ -438,12 +459,13 @@ class Editor extends React.Component {
       this.Xunpacked = this.Yunpacked;
       // 现在 Y 的长度应该是 newLen
       this.initY({ length: this.Yunpacked.newLen });
+      this._state = 'init';
     }, 500);
     this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
   }
   mockInput() {
     clearTimeout(this._genE);
-    this._genETime = random(100, 500);
+    this._genETime = random(100, 200);
     this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
     // 200ms - 800ms 之间
     if (!this._initOK) {
@@ -474,6 +496,9 @@ class Editor extends React.Component {
     if (insert) {
       delta.insert(insert);
     }
+    // const del = random(1, Math.ceil(this._YoldFullText.length / 3));
+    // 这个delete 应该不包括换行
+    delta.delete(2);
     return delta;
   }
 
@@ -499,6 +524,8 @@ class Editor extends React.Component {
       if (source !== "user") {
         return;
       }
+      this.checkStateErr({expectStates: ['init']});
+      this._state = 'composing';
       this.debugAXY();
       // 这里视图上已经渲染了最新的编辑 delta， 需要同步到 Y 上 Y <- YE
       const YnewLen = this.Yunpacked.newLen;
@@ -516,6 +543,7 @@ class Editor extends React.Component {
       const YEText = editor.getText();
       this._YoldFullText = YEText;
       console.log("Y and YETex", this.Yunpacked, YEText.length);
+      this._state = 'init';
     } catch (err) {
       console.log(err);
       this._initOK = false;
@@ -526,12 +554,9 @@ class Editor extends React.Component {
     return (
       <div>
         <Button
-          disabled
           onClick={() => {
-            this.quillRef.updateContents(
-              new Delta([{ retain: 10 }, { insert: "haha" }]),
-              "silent"
-            );
+            clearTimeout(this._genE);
+            console.log(this._state, this._stateErr.length, this._stateErr);
           }}
         >
           haha
