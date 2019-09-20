@@ -7,8 +7,8 @@ import "react-quill/dist/quill.snow.css"; // ES6
 import React, { useState, useEffect, useRef } from "react";
 // import { Delta } from "quill";
 import Delta from "quill-delta";
-const Changeset = require('../utils/Changeset');
-const AttributePool = require('../utils/AttributePool');
+const Changeset = require("../utils/Changeset");
+const AttributePool = require("../utils/AttributePool");
 const socketConfig = { port: 5000 };
 function attachEvent(socket) {
   socket.on("connect", () => {
@@ -74,23 +74,23 @@ const FORMATS = [
  * @param {string} {cs}
  * @param {AttributePool} {pool}
  */
-function cs2delta({cs, pool}) {
+function cs2delta({ cs, pool }) {
   const delta = new Delta();
   const unpacked = Changeset.unpack(cs);
   const csIter = Changeset.opIterator(unpacked.ops);
   const bankIter = Changeset.stringIterator(unpacked.charBank);
-  while(csIter.hasNext()) {
+  while (csIter.hasNext()) {
     const op = csIter.next();
     switch (op.opcode) {
-    case '+':
-      delta.insert(bankIter.take(op.chars));
-      break;
-    case '-':
-      delta.delete(op.chars);
-      break;
-    case '=':
-      delta.retain(op.chars);
-      break;
+      case "+":
+        delta.insert(bankIter.take(op.chars));
+        break;
+      case "-":
+        delta.delete(op.chars);
+        break;
+      case "=":
+        delta.retain(op.chars);
+        break;
     }
   }
   return delta;
@@ -128,9 +128,9 @@ function cs2delta({cs, pool}) {
  * @param {Number} {oldLen}
  * @param {AttributePool} {pool}
  */
-function delta2cs({ delta, oldLen,  pool }) {
-  let bank=''; // from insert
-  let opsStr=''; // transform the insert and attribues
+function delta2cs({ delta, oldLen, pool }) {
+  let bank = ""; // from insert
+  let opsStr = ""; // transform the insert and attribues
   let newLen = oldLen; // count insert and delete
   // // 如何处理 lines 的操作符  |N |
   // Delta {ops: Array(6)}
@@ -143,31 +143,29 @@ function delta2cs({ delta, oldLen,  pool }) {
   //       5:{delete: 1}
 
   // // 直接使用 Changeset.makeSplice=function (oldFullText, spliceStart, numRemoved, newText, optNewTextAPairs, pool) ?
-  for(const op of delta.ops) {
+  for (const op of delta.ops) {
     if (op.retain) {
       opsStr += `=${Changeset.numToString(op.retain)}`;
       if (op.attributes) {
-
       }
-    } else if(op.insert) {
+    } else if (op.insert) {
       newLen += op.insert.length;
       bank += op.insert;
       opsStr += `+${Changeset.numToString(op.insert.length)}`;
       // opsStr
       // todo attributes
       if (op.attributes) {
-
       }
-    } else if(op.delete) {
+    } else if (op.delete) {
       opsStr += `-${Changeset.numToString(op.delete)}`;
       newLen -= op.delete;
     } else {
       console.log(`wrong op: ${JSON.stringify(op)}`);
-    } 
+    }
   }
   return Changeset.pack(oldLen, newLen, opsStr, bank);
 }
-// onChange(content, delta, source, editor) : Called back with the new contents of the editor after change. It will be passed the HTML contents of the editor, 
+// onChange(content, delta, source, editor) : Called back with the new contents of the editor after change. It will be passed the HTML contents of the editor,
 // a delta object expressing the change, the source of the change, and finally a read-only proxy to editor accessors such as getHTML().
 // warning Do not use this delta object as value, as it will cause a loop. Use editor.getContents() instead. See Using Deltas for details.
 
@@ -183,15 +181,14 @@ function delta2cs({ delta, oldLen,  pool }) {
 
 // onKeyUp(event) : Called after a key has been released.
 
-
 const DocComponent = ({ docId, socket }) => {
   const modules = MODULES;
   const formats = FORMATS;
   attachEvent(socket);
   const reactQuillRef = useRef(null);
   const [text, setText] = useState("");
-  var A,X,Y;
-  var Aunpacked,Xunpacked,Yunpacked;
+  var A, X, Y;
+  var Aunpacked, Xunpacked, Yunpacked;
   var _pool; // AttributePool 实例
   var _baseRev;
   /**
@@ -200,10 +197,15 @@ const DocComponent = ({ docId, socket }) => {
    * @param {Object} {obj}
    * @param {Object} {obj.doc}
    */
-  function initA({doc}) {
+  function initA({ doc }) {
     const { atext } = doc;
     A = Changeset.pack(0, atext.text.length, atext.attribs, atext.text);
-    Aunpacked = {oldLen: 0, newLen: atext.text.length, ops: atext.attribs, charBank: atext.text};
+    Aunpacked = {
+      oldLen: 0,
+      newLen: atext.text.length,
+      ops: atext.attribs,
+      charBank: atext.text
+    };
   }
   /**
    *
@@ -211,9 +213,9 @@ const DocComponent = ({ docId, socket }) => {
    * @param {*} {obj}
    * @param {Number} {obj.length}
    */
-  function initX({length}) {
+  function initX({ length }) {
     X = Changeset.identity(length);
-    Xunpacked = { oldLen: length, newLen: length, ops: '', charBank: ''};
+    Xunpacked = { oldLen: length, newLen: length, ops: "", charBank: "" };
   }
   /**
    *
@@ -221,9 +223,9 @@ const DocComponent = ({ docId, socket }) => {
    * @param {*} {obj}
    * @param {Number} {obj.length}
    */
-  function initY({length}) {
+  function initY({ length }) {
     Y = Changeset.identity(length);
-    Yunpacked = { oldLen: length, newLen: length, ops: '', charBank: ''};
+    Yunpacked = { oldLen: length, newLen: length, ops: "", charBank: "" };
   }
   /**
    *合并 Y 和 当前编辑器输入 E
@@ -232,8 +234,12 @@ const DocComponent = ({ docId, socket }) => {
    * @param {*} {obj.Y}
    * @param {*} {obj.E}
    */
-  function composeYE({Y, E, pool}) {
-    return Changeset.compose(Y, E, pool);
+  function composeYE({ Y, E, pool }) {
+    return Changeset.compose(
+      Y,
+      E,
+      pool
+    );
   }
 
   const initDoc = doc => {
@@ -241,21 +247,21 @@ const DocComponent = ({ docId, socket }) => {
     // console.log(reactQuillRef);
     // console.log(quillRef);
     // quillRef.setText(doc.atext.text, 'silent');
-    initA({doc});
-    initX({length: doc.atext.text.length});
-    initY({length: doc.atext.text.length});
-    _pool = (new AttributePool()).fromJsonable(doc.pool);
+    initA({ doc });
+    initX({ length: doc.atext.text.length });
+    initY({ length: doc.atext.text.length });
+    _pool = new AttributePool().fromJsonable(doc.pool);
     _baseRev = doc.head;
-    const delta = cs2delta({ cs: A, pool: _pool});
-    quillRef.setContents(delta, 'slient');
+    const delta = cs2delta({ cs: A, pool: _pool });
+    quillRef.setContents(delta, "slient");
   };
-  const debugAXY = ()=>{
-    console.log('A:', Aunpacked, A);
-    console.log('X:', Xunpacked, X);
-    console.log('Y:', Yunpacked, Y);
-    console.log('pool', _pool);
-    console.log('baseRev', _baseRev);
-  }
+  const debugAXY = () => {
+    console.log("A:", Aunpacked, A);
+    console.log("X:", Xunpacked, X);
+    console.log("Y:", Yunpacked, Y);
+    console.log("pool", _pool);
+    console.log("baseRev", _baseRev);
+  };
   useEffect(() => {
     async function fetchData() {
       socket.emit("initDoc", docId);
@@ -271,7 +277,7 @@ const DocComponent = ({ docId, socket }) => {
     }
     console.log("on effect");
     fetchData();
-    const sendServerY = setInterval(()=>{
+    const sendServerY = setInterval(() => {
       // 定时发送 Y 500ms
       // send Y to server
       // X <- Y
@@ -281,27 +287,34 @@ const DocComponent = ({ docId, socket }) => {
       // Xunpacked = Yunpacked;
       // // 现在 Y 的长度应该是 newLen
       // initY({length: Yunpacked.newLen});
-      console.log('on interval');
+      console.log("on interval");
     }, 500);
     return () => clearInterval(sendServerY);
-  }, []);  
-  socket.on('syncAck', (data)=>{
+  }, []);
+  socket.on("syncAck", data => {
     // 监听到 ack
     // A <- AX
     // X <- identity
-    const {docId, revNum } = data;
-    A = Changeset.compose(A, X);
-    console.log('sync ack revNum, baseRev', revNum, _baseRev);
+    const { docId, revNum } = data;
+    A = Changeset.compose(
+      A,
+      X
+    );
+    console.log("sync ack revNum, baseRev", revNum, _baseRev);
     _baseRev = revNum;
-    initX({length: Xunpacked.newLen});
+    initX({ length: Xunpacked.newLen });
   });
-  socket.on('userChange', (data)=>{
-    const {docId, changeset, pool, revNum }=data;
+  socket.on("userChange", data => {
+    const { docId, changeset, pool, revNum } = data;
     // 从服务器得到了 B，需要计算出对应的 ops 并且 silent 更新 editor
-    const apool = (new AttributePool()).fromJsonable(pool);
-    const Api = Changeset.compose(A, changeset, apool);
+    const apool = new AttributePool().fromJsonable(pool);
+    const Api = Changeset.compose(
+      A,
+      changeset,
+      apool
+    );
     const Xpi = Changeset.follow(changeset, X, false, apool);
-    const Bpi = Changeset.follow(X, changeset,false, apool)
+    const Bpi = Changeset.follow(X, changeset, false, apool);
     const Ypi = Changeset.follow(Bpi, Y, false, apool);
     const D = Changeset.follow(Y, Bpi, false, true);
     A = Api;
@@ -313,11 +326,11 @@ const DocComponent = ({ docId, socket }) => {
     // 当前的视图，应该是 D 的 cs2delta
     // 此时需要更新本地的 pool 吗
     _pool = apool;
-    console.log('user change revNum, baseRev', revNum, _baseRev);
+    console.log("user change revNum, baseRev", revNum, _baseRev);
     _baseRev = revNum;
-    const delta = cs2delta({cs: D, pool: _pool});
+    const delta = cs2delta({ cs: D, pool: _pool });
     const quillRef = reactQuillRef.current.getEditor();
-    quillRef.updateContents(delta, 'silent');
+    quillRef.updateContents(delta, "silent");
   });
   const onChange = (content, delta, source, editor) => {
     // console.log(content);
@@ -330,12 +343,12 @@ const DocComponent = ({ docId, socket }) => {
     debugAXY();
     const YnewLen = Yunpacked.newLen;
     const E = delta2cs({ delta, oldLen: YnewLen, pool: _pool });
-    console.log('当前delta的cs', delta, E);
+    console.log("当前delta的cs", delta, E);
     // 合并 Y and E
-    Y = composeYE({Y, E, pool: _pool});
+    Y = composeYE({ Y, E, pool: _pool });
     Yunpacked = Changeset.unpack(Y);
     const YEText = editor.getText();
-    console.log('Y and YETex',Yunpacked, YEText);
+    console.log("Y and YETex", Yunpacked, YEText);
     setText(YEText);
   };
 
@@ -352,7 +365,10 @@ const DocComponent = ({ docId, socket }) => {
           setText(text + "haha");
           const quillRef = reactQuillRef.current.getEditor();
           // console.log(quillRef);
-          quillRef.updateContents(new Delta([{retain: 10}, { insert: 'haha'}]), 'silent');
+          quillRef.updateContents(
+            new Delta([{ retain: 10 }, { insert: "haha" }]),
+            "silent"
+          );
         }}
       >
         haha

@@ -7,8 +7,8 @@ import "react-quill/dist/quill.snow.css"; // ES6
 import React from "react";
 // import { Delta } from "quill";
 import Delta from "quill-delta";
-const Changeset = require('../utils/Changeset');
-const AttributePool = require('../utils/AttributePool');
+const Changeset = require("../utils/Changeset");
+const AttributePool = require("../utils/AttributePool");
 const socketConfig = { port: 5000 };
 const MODULES = {
   toolbar: [
@@ -44,29 +44,29 @@ const FORMATS = [
 // const number =  '\n0123456789\n';
 // const sign = '!@#$%^&*()';
 // const STR = char + number + sign;
-const STR = 'abcdefghijklmnopqrstuvwxyz';
+const STR = "abcdefghijklmnopqrstuvwxyz";
 /**
  *
  *
  * @param {string} {cs}
  * @param {AttributePool} {pool}
  */
-function cs2delta({cs, pool}) {
+function cs2delta({ cs, pool }) {
   const delta = new Delta();
   const unpacked = Changeset.unpack(cs);
   const csIter = Changeset.opIterator(unpacked.ops);
   const bankIter = Changeset.stringIterator(unpacked.charBank);
-  while(csIter.hasNext()) {
+  while (csIter.hasNext()) {
     const op = csIter.next();
     // op.attribs 表示这个操作的属性
     switch (op.opcode) {
-      case '+':
+      case "+":
         delta.insert(bankIter.take(op.chars));
         break;
-      case '-':
+      case "-":
         delta.delete(op.chars);
         break;
-      case '=':
+      case "=":
         delta.retain(op.chars);
         break;
     }
@@ -113,9 +113,9 @@ function cs2delta({cs, pool}) {
  * @param {Number} {oldLen}
  * @param {AttributePool} {pool}
  */
-function delta2cs({ delta, oldLen,  pool }) {
-  let bank=''; // from insert
-  let opsStr=''; // transform the insert and attribues
+function delta2cs({ delta, oldLen, pool }) {
+  let bank = ""; // from insert
+  let opsStr = ""; // transform the insert and attribues
   let newLen = oldLen; // count insert and delete
   // // 如何处理 lines 的操作符  |N |
   // Delta {ops: Array(6)}
@@ -128,27 +128,25 @@ function delta2cs({ delta, oldLen,  pool }) {
   //       5:{delete: 1}
 
   // // 直接使用 Changeset.makeSplice=function (oldFullText, spliceStart, numRemoved, newText, optNewTextAPairs, pool) ?
-  for(const op of delta.ops) {
+  for (const op of delta.ops) {
     if (op.retain) {
       opsStr += `=${Changeset.numToString(op.retain)}`;
       if (op.attributes) {
-
       }
-    } else if(op.insert) {
+    } else if (op.insert) {
       newLen += op.insert.length;
       bank += op.insert;
       opsStr += `+${Changeset.numToString(op.insert.length)}`;
       // opsStr
       // todo attributes
       if (op.attributes) {
-
       }
-    } else if(op.delete) {
+    } else if (op.delete) {
       opsStr += `-${Changeset.numToString(op.delete)}`;
       newLen -= op.delete;
     } else {
       console.log(`wrong op: ${JSON.stringify(op)}`);
-    } 
+    }
   }
   return Changeset.pack(oldLen, newLen, opsStr, bank);
 }
@@ -159,42 +157,42 @@ function delta2cs({ delta, oldLen,  pool }) {
  */
 function delta2csLines({ delta, oldFullText, oldLen, pool }) {
   // 理论所知：每一个 cs 都需要有基本的 olFullText, 也是在这里计算对应的 行数变动
-  const assem =  Changeset.smartOpAssembler();
+  const assem = Changeset.smartOpAssembler();
   const textIter = Changeset.stringIterator(oldFullText);
   // function appendOpWithText(opcode, text, attribs, pool){}
   // let newLen = oldLen;
   let newLen = oldLen;
-  let bank=''; // from insert
-  console.log('oldFullText.length: oldLen', oldFullText.length, oldLen);
+  let bank = ""; // from insert
+  console.log("oldFullText.length: oldLen", oldFullText.length, oldLen);
   console.log(delta, oldLen);
-  for(const op of delta.ops) {
+  for (const op of delta.ops) {
     if (op.retain) {
       if (op.attributes) {
       }
       const text = textIter.take(op.retain);
-      assem.appendOpWithText('=', text);
+      assem.appendOpWithText("=", text);
     } else if (op.insert) {
       if (op.attributes) {
       }
       const text = op.insert;
-      assem.appendOpWithText('+', text);
+      assem.appendOpWithText("+", text);
       newLen += op.insert.length;
       bank += op.insert;
     } else if (op.delete) {
       const text = textIter.take(op.delete);
-      assem.appendOpWithText('-', text);
+      assem.appendOpWithText("-", text);
       newLen -= op.delete;
     } else {
       console.log(`wrong op: ${JSON.stringify(op)}`);
-    } 
+    }
   }
   assem.endDocument();
   const ops = assem.toString();
-  console.log('assem', ops);
+  console.log("assem", ops);
   return Changeset.pack(oldLen, newLen, ops, bank);
 }
 
-// onChange(content, delta, source, editor) : Called back with the new contents of the editor after change. It will be passed the HTML contents of the editor, 
+// onChange(content, delta, source, editor) : Called back with the new contents of the editor after change. It will be passed the HTML contents of the editor,
 // a delta object expressing the change, the source of the change, and finally a read-only proxy to editor accessors such as getHTML().
 // warning Do not use this delta object as value, as it will cause a loop. Use editor.getContents() instead. See Using Deltas for details.
 
@@ -210,20 +208,19 @@ function delta2csLines({ delta, oldFullText, oldLen, pool }) {
 
 // onKeyUp(event) : Called after a key has been released.
 
-
 class Editor extends React.Component {
   constructor(props) {
-    super(props)
-    this.quillRef = null;      // Quill instance
+    super(props);
+    this.quillRef = null; // Quill instance
     this.reactQuillRef = null; // ReactQuill component
     this.onChange = this.onChange.bind(this);
     this.modules = MODULES;
     this.formats = FORMATS;
     this.socket = props.socket;
     this.docId = props.docId;
-    this.A = '';
-    this.X = '';
-    this.Y = '';
+    this.A = "";
+    this.X = "";
+    this.Y = "";
     this.Aunpacked = null;
     this.Xunpacked = null;
     this.Yunpacked = null;
@@ -231,8 +228,8 @@ class Editor extends React.Component {
     this._baseRev = -1;
     this.attachEvent(this.socket);
     this._initOK = false;
-    this._YoldFullText = '';
-    // for test 
+    this._YoldFullText = "";
+    // for test
     this._genE = null;
     this._genETime = 500;
   }
@@ -266,29 +263,36 @@ class Editor extends React.Component {
       console.log(`atteattemptNumbermp: ${attemptNumber}`);
     });
     // ------------ server ---------------------
-    socket.on('syncAck', (data)=>{
+    socket.on("syncAck", data => {
       // 监听到 ack
       // A <- AX
       // X <- identity
       try {
-        const {docId, revNum } = data;
-        this.A = Changeset.compose(this.A, this.X);
-        console.log('sync ack revNum, baseRev', revNum, this._baseRev);
+        const { docId, revNum } = data;
+        this.A = Changeset.compose(
+          this.A,
+          this.X
+        );
+        console.log("sync ack revNum, baseRev", revNum, this._baseRev);
         this._baseRev = revNum;
-        this.initX({length: this.Xunpacked.newLen});
+        this.initX({ length: this.Xunpacked.newLen });
       } catch (err) {
         console.log(err);
         this._initOK = false;
       }
     });
-    socket.on('userChange', (data)=>{
+    socket.on("userChange", data => {
       try {
-        const {docId, changeset, pool, revNum }=data;
+        const { docId, changeset, pool, revNum } = data;
         // 从服务器得到了 B，需要计算出对应的 ops 并且 silent 更新 editor
-        const apool = (new AttributePool()).fromJsonable(pool);
-        const Api = Changeset.compose(this.A, changeset, apool);
+        const apool = new AttributePool().fromJsonable(pool);
+        const Api = Changeset.compose(
+          this.A,
+          changeset,
+          apool
+        );
         const Xpi = Changeset.follow(changeset, this.X, false, apool);
-        const Bpi = Changeset.follow(this.X, changeset,false, apool)
+        const Bpi = Changeset.follow(this.X, changeset, false, apool);
         const Ypi = Changeset.follow(Bpi, this.Y, false, apool);
         const D = Changeset.follow(this.Y, Bpi, false, apool);
         this.A = Api;
@@ -300,20 +304,24 @@ class Editor extends React.Component {
         // 当前的视图，应该是 D 的 cs2delta
         // 此时需要更新本地的 pool 吗
         this._pool = apool;
-        console.log('user change revNum, baseRev:', changeset, revNum, this._baseRev);
-        console.log('user change X, Y:', this.X, this.Y);
+        console.log(
+          "user change revNum, baseRev:",
+          changeset,
+          revNum,
+          this._baseRev
+        );
+        console.log("user change X, Y:", this.X, this.Y);
         this._baseRev = revNum;
-        const delta = cs2delta({cs: D, pool: this._pool});
-        this.quillRef.updateContents(delta, 'silent');
+        const delta = cs2delta({ cs: D, pool: this._pool });
+        this.quillRef.updateContents(delta, "silent");
         const currentText = this.quillRef.getText();
         this._YoldFullText = currentText;
-        console.log('user change y old full text:', this._YoldFullText.length);
+        console.log("user change y old full text:", this._YoldFullText.length);
       } catch (err) {
         console.log(err);
         this._initOK = false;
       }
-
-    })
+    });
   }
   /**
    *
@@ -321,10 +329,15 @@ class Editor extends React.Component {
    * @param {Object} {obj}
    * @param {Object} {obj.doc}
    */
-  initA({doc}) {
+  initA({ doc }) {
     const { atext } = doc;
     this.A = Changeset.pack(0, atext.text.length, atext.attribs, atext.text);
-    this.Aunpacked = {oldLen: 0, newLen: atext.text.length, ops: atext.attribs, charBank: atext.text};
+    this.Aunpacked = {
+      oldLen: 0,
+      newLen: atext.text.length,
+      ops: atext.attribs,
+      charBank: atext.text
+    };
   }
   /**
    *
@@ -332,9 +345,9 @@ class Editor extends React.Component {
    * @param {*} {obj}
    * @param {Number} {obj.length}
    */
-  initX({length}) {
+  initX({ length }) {
     this.X = Changeset.identity(length);
-    this.Xunpacked = { oldLen: length, newLen: length, ops: '', charBank: ''};
+    this.Xunpacked = { oldLen: length, newLen: length, ops: "", charBank: "" };
   }
   /**
    *
@@ -342,9 +355,9 @@ class Editor extends React.Component {
    * @param {*} {obj}
    * @param {Number} {obj.length}
    */
-  initY({length}) {
+  initY({ length }) {
     this.Y = Changeset.identity(length);
-    this.Yunpacked = { oldLen: length, newLen: length, ops: '', charBank: ''};
+    this.Yunpacked = { oldLen: length, newLen: length, ops: "", charBank: "" };
   }
   /**
    *合并 Y 和 当前编辑器输入 E
@@ -353,24 +366,28 @@ class Editor extends React.Component {
    * @param {*} {obj.Y}
    * @param {*} {obj.E}
    */
-  composeYE({Y, E, pool}) {
-    return Changeset.compose(Y, E, pool);
+  composeYE({ Y, E, pool }) {
+    return Changeset.compose(
+      Y,
+      E,
+      pool
+    );
   }
 
-  initDoc({doc}) {
+  initDoc({ doc }) {
     if (this._initOK) {
-      console.log('already init ok');
+      console.log("already init ok");
       return;
     }
     const text = doc.atext.text;
-    this.initA({doc});
-    this.initX({length: text.length});
-    this.initY({length: text.length});
-    this._pool = (new AttributePool()).fromJsonable(doc.pool);
+    this.initA({ doc });
+    this.initX({ length: text.length });
+    this.initY({ length: text.length });
+    this._pool = new AttributePool().fromJsonable(doc.pool);
     this._baseRev = doc.head;
-    const delta = cs2delta({ cs: this.A, pool: this._pool});
+    const delta = cs2delta({ cs: this.A, pool: this._pool });
     this.debugAXY();
-    this.quillRef.setContents(delta, 'slient');
+    this.quillRef.setContents(delta, "slient");
     this._initOK = true;
     this._YoldFullText = text;
   }
@@ -380,7 +397,7 @@ class Editor extends React.Component {
       this.socket.on("initDoc", doc => {
         console.log(doc);
         // 这里静默加载内容
-        this.initDoc({doc});
+        this.initDoc({ doc });
         resovle();
       });
     });
@@ -392,7 +409,7 @@ class Editor extends React.Component {
   componentDidMount() {
     this.fetchData();
     this.attachQuillRefs();
-    this.sendServerY = setInterval(()=>{
+    this.sendServerY = setInterval(() => {
       // 定时发送 Y 500ms
       // send Y to server
       // X <- Y
@@ -400,104 +417,123 @@ class Editor extends React.Component {
       if (!this._initOK) {
         return;
       }
-      if (this.Y === '' || Changeset.isIdentity(this.Y) || !Changeset.isIdentity(this.X)) {
+      if (
+        this.Y === "" ||
+        Changeset.isIdentity(this.Y) ||
+        !Changeset.isIdentity(this.X)
+      ) {
         return;
       }
-      this.socket.emit('syncEvent', {changeset: this.Y, pool: this._pool, docId: this.docId, baseRev: this._baseRev});
+      this.socket.emit("syncEvent", {
+        changeset: this.Y,
+        pool: this._pool,
+        docId: this.docId,
+        baseRev: this._baseRev
+      });
       this.X = this.Y;
       this.Xunpacked = this.Yunpacked;
       // 现在 Y 的长度应该是 newLen
-      this.initY({ length: this.Yunpacked.newLen});
+      this.initY({ length: this.Yunpacked.newLen });
     }, 500);
     this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
   }
   mockInput() {
     clearTimeout(this._genE);
-    this._genETime = Math.floor(Math.random()*300) + 100;
-    this._genE = setTimeout(this.mockInput.bind(this), this._genETime); 
+    this._genETime = Math.floor(Math.random() * 300) + 100;
+    this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
     // 200ms - 800ms 之间
-     if (!this._initOK) {
+    if (!this._initOK) {
       return;
     }
     const delta = this.genDelta();
-    this.quillRef.updateContents(delta, 'user');
-    console.log('mock input: ', delta);
+    this.quillRef.updateContents(delta, "user");
+    console.log("mock input: ", delta);
   }
   genDelta() {
     const retain = Math.ceil(this._YoldFullText.length / 2);
     const start = Math.ceil(STR.length / Math.random() / 10);
     const insert = STR.slice(start);
     const delta = new Delta();
-    if (retain > 0){
-      delta.retain(retain)
+    if (retain > 0) {
+      delta.retain(retain);
     }
     if (insert) {
       delta.insert(insert);
     }
     return delta;
   }
-  
+
   componentDidUpdate() {
     this.attachQuillRefs();
   }
-  
+
   attachQuillRefs = () => {
-    if (typeof this.reactQuillRef.getEditor !== 'function') return;
+    if (typeof this.reactQuillRef.getEditor !== "function") return;
     this.quillRef = this.reactQuillRef.getEditor();
-  }
+  };
   debugAXY() {
-    console.log('A:', this.Aunpacked, this.A.length);
-    console.log('X:', this.Xunpacked, this.X.length);
-    console.log('Y:', this.Yunpacked, this.Y.length);
-    console.log('pool', this._pool);
-    console.log('baseRev', this._baseRev);
-    console.log('YoldFullText', this._YoldFullText.length);
+    console.log("A:", this.Aunpacked, this.A.length);
+    console.log("X:", this.Xunpacked, this.X.length);
+    console.log("Y:", this.Yunpacked, this.Y.length);
+    console.log("pool", this._pool);
+    console.log("baseRev", this._baseRev);
+    console.log("YoldFullText", this._YoldFullText.length);
   }
   onChange(content, delta, source, editor) {
     try {
       // 这里不能使用 updateContents 更新 text, 导致 loop。
-      if (source!=='user') {
+      if (source !== "user") {
         return;
       }
       this.debugAXY();
       // 这里视图上已经渲染了最新的编辑 delta， 需要同步到 Y 上 Y <- YE
       const YnewLen = this.Yunpacked.newLen;
       // const E = delta2cs({ delta, oldLen: YnewLen, pool: this._pool });
-      const E = delta2csLines({ delta, oldFullText: this._YoldFullText, oldLen: YnewLen, pool: this._pool });
-      console.log('当前delta的cs', delta, E);
+      const E = delta2csLines({
+        delta,
+        oldFullText: this._YoldFullText,
+        oldLen: YnewLen,
+        pool: this._pool
+      });
+      console.log("当前delta的cs", delta, E);
       // 合并 Y and E
-      this.Y = this.composeYE({Y: this.Y, E, pool: this._pool});
+      this.Y = this.composeYE({ Y: this.Y, E, pool: this._pool });
       this.Yunpacked = Changeset.unpack(this.Y);
       const YEText = editor.getText();
       this._YoldFullText = YEText;
-      console.log('Y and YETex', this.Yunpacked, YEText.length);
+      console.log("Y and YETex", this.Yunpacked, YEText.length);
     } catch (err) {
       console.log(err);
       this._initOK = false;
     }
   }
-  
+
   render() {
     return (
       <div>
         <Button
           disabled
           onClick={() => {
-            this.quillRef.updateContents(new Delta([{retain: 10}, { insert: 'haha'}]), 'silent');
+            this.quillRef.updateContents(
+              new Delta([{ retain: 10 }, { insert: "haha" }]),
+              "silent"
+            );
           }}
         >
           haha
         </Button>
-        <ReactQuill 
+        <ReactQuill
           // readOnly={true}
-          ref={(el) => { this.reactQuillRef = el }}
-          theme={'snow'} 
+          ref={el => {
+            this.reactQuillRef = el;
+          }}
+          theme={"snow"}
           modules={this.modules}
           formats={this.formats}
-          onChange={this.onChange}  
+          onChange={this.onChange}
         />
       </div>
-    )
+    );
   }
 }
 const DocContainer = () => {
@@ -509,7 +545,7 @@ const DocContainer = () => {
   socket.on("connect", () => {
     console.log(`container: ${socket.id}`);
   });
-  const docId =  7|| Math.ceil(Math.random() * 10);
+  const docId = 7 || Math.ceil(Math.random() * 10);
   return (
     <div className={styles.normal}>
       <Editor className={styles.doc} docId={docId} socket={socket} />
