@@ -63,21 +63,33 @@ function cs2delta({ cs, pool }) {
   while (csIter.hasNext()) {
     const op = csIter.next();
     // op.attribs 表示这个操作的属性
+    const attributes = attribs2attributes({ op, pool});
     switch (op.opcode) {
       case "+":
-        delta.insert(bankIter.take(op.chars));
+        delta.insert(bankIter.take(op.chars), attributes);
         break;
       case "-":
         delta.delete(op.chars);
         break;
       case "=":
-        delta.retain(op.chars);
+        delta.retain(op.chars, attributes);
         break;
     }
   }
   return delta;
 }
-
+function attribs2attributes({ op, pool}) {
+  const attributes = op.attribs.split('*').filter(Boolean).reduce((obj, num) =>{
+    const pair = pool.getAttrib(Number((num)));
+    obj[pair[0]] = pair[1];
+    return obj;
+  }, {});
+  return attributes;
+}
+// use appendOpWithText(opcode, text, attribs, pool){} instead
+function attributes2attribs({ delta, pool}) {
+  // 
+}
 // // Keep the next 5 characters
 // { retain: 5 }
 
@@ -169,22 +181,20 @@ function delta2csLines({ delta, oldFullText, oldLen, pool }) {
   let bank = ""; // from insert
   console.log("oldFullText.length: oldLen", oldFullText.length, oldLen);
   console.log(delta, oldLen);
+  // do not take care of embed
   for (const op of delta.ops) {
+    const attribs = op.attributes && Object.keys(op.attributes).map(key=>{return [key, op.attributes[key]];});
     if (op.retain) {
-      if (op.attributes) {
-      }
       const text = textIter.take(op.retain);
-      assem.appendOpWithText("=", text);
+      assem.appendOpWithText("=", text, attribs, pool);
     } else if (op.insert) {
-      if (op.attributes) {
-      }
       const text = op.insert;
-      assem.appendOpWithText("+", text);
+      assem.appendOpWithText("+", text, attribs, pool);
       newLen += op.insert.length;
       bank += op.insert;
     } else if (op.delete) {
       const text = textIter.take(op.delete);
-      assem.appendOpWithText("-", text);
+      assem.appendOpWithText("-", text, attribs, pool);
       newLen -= op.delete;
     } else {
       console.log(`wrong op: ${JSON.stringify(op)}`);
@@ -259,7 +269,7 @@ class Editor extends React.Component {
     }
   }
   attachEvent(socket) {
-    socket.on("connect", () => {
+      socket.on("connect", () => {
       console.log(`component: ${socket.id}`);
     });
     socket.on("connect_error", error => {
@@ -299,7 +309,8 @@ class Editor extends React.Component {
         this.checkDocAndVersion(data);
         this.A = Changeset.compose(
           this.A,
-          this.X
+          this.X,
+          this._pool
         );
         console.log("sync ack revNum, baseRev", revNum, this._baseRev);
         this._baseRev = revNum;
@@ -315,9 +326,15 @@ class Editor extends React.Component {
         this.checkStateErr({expectStates: ['init']});
         this.checkDocAndVersion(data);
         this._state = 'following';
-        const { docId, changeset, pool, revNum } = data;
+        const { docId, pool, revNum } = data;
         // 从服务器得到了 B，需要计算出对应的 ops 并且 silent 更新 editor
-        const apool = new AttributePool().fromJsonable(pool);
+        const wireApool = new AttributePool().fromJsonable(pool);
+        // 此时需要更新本地的 pool 吗
+        const changeset = Changeset.moveOpsToNewPool(data.changeset, wireApool, this._pool);
+        if (changeset !== data.changeset) {
+          this._syncErr.push(`user chagne to pool ${data.changeset} -> ${changeset}, ${JSON.stringify(wireApool)} -> ${JSON.stringify(this._pool)}`);
+        }
+        const apool = this._pool;
         const Api = Changeset.compose(
           this.A,
           changeset,
@@ -334,8 +351,6 @@ class Editor extends React.Component {
         this.Y = Ypi;
         this.Yunpacked = Changeset.unpack(this.Y);
         // 当前的视图，应该是 D 的 cs2delta
-        // 此时需要更新本地的 pool 吗
-        this._pool = apool;
         console.log(
           "user change revNum, baseRev:",
           changeset,
@@ -502,11 +517,16 @@ class Editor extends React.Component {
       const mid = Math.floor(insert.length / 2);
       insert = insert.slice(0, mid) + "\n" + insert.slice(mid);
     }
+    const attrs = [{ bold: true}, {underline: true}, {strike: true}, {link: 'http://cn.bing.com'}];
+    // add attributes 
     if (retain > 0) {
       delta.retain(retain);
+      if(hasLine) {
+        delta.retain(1, attrs[random(0, attrs.length)]);
+      }
     }
     if (insert) {
-      delta.insert(insert);
+      delta.insert(insert, hasLine ? attrs[random(0, attrs.length)] : undefined);
     }
     // const del = random(1, Math.ceil(this._YoldFullText.length / 3));
     // 这个delete 应该不包括换行
