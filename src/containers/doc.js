@@ -236,17 +236,27 @@ class Editor extends React.Component {
     // for state
     this._state = 'none'; // none init syncAcking following composing sending
     this._stateErr = [];
+    // for check doc and version and pool
+    this._syncErr = [];
     // for test
-    this._genE = null;
-    this._genETime = 500;
+    this._geneE = null;
+    this._geneETime = 500;
   }
   checkStateErr({expectStates = []}) {
     if (!expectStates.includes(this._state)) {
-      this.genStateErrMsg({expectStates});
+      this.geneStateErrMsg({expectStates});
     }
   }
-  genStateErrMsg({expectStates = []}) {
+  geneStateErrMsg({expectStates = []}) {
     this._stateErr.push(`expect: ${expectStates}, actual: ${this._state}`);
+  }
+  checkDocAndVersion({ docId, revNum }) {
+    if(docId!==this.docId) {
+      this._syncErr.push(`expect: ${this.docId}, actual: ${docId}`);
+    }
+    if(revNum <= this._baseRev) {
+      this._syncErr.push(`expect revNum > this._baseRev, actual: ${revNum} <= ${this._baseRev}`);
+    }
   }
   attachEvent(socket) {
     socket.on("connect", () => {
@@ -286,6 +296,7 @@ class Editor extends React.Component {
         this.checkStateErr({expectStates: ['init']});
         this._state = 'syncAcking';
         const { docId, revNum } = data;
+        this.checkDocAndVersion(data);
         this.A = Changeset.compose(
           this.A,
           this.X
@@ -302,6 +313,7 @@ class Editor extends React.Component {
     socket.on("userChange", data => {
       try {
         this.checkStateErr({expectStates: ['init']});
+        this.checkDocAndVersion(data);
         this._state = 'following';
         const { docId, changeset, pool, revNum } = data;
         // 从服务器得到了 B，需要计算出对应的 ops 并且 silent 更新 editor
@@ -427,7 +439,7 @@ class Editor extends React.Component {
   }
   componentWillUnmount() {
     clearTimeout(this.sendServerY);
-    clearTimeout(this._genE);
+    clearTimeout(this._geneE);
   }
   componentDidMount() {
     this.fetchData();
@@ -461,12 +473,12 @@ class Editor extends React.Component {
       this.initY({ length: this.Yunpacked.newLen });
       this._state = 'init';
     }, 500);
-    this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
+    this._geneE = setTimeout(this.mockInput.bind(this), this._geneETime);
   }
   mockInput() {
-    clearTimeout(this._genE);
-    this._genETime = random(100, 200);
-    this._genE = setTimeout(this.mockInput.bind(this), this._genETime);
+    clearTimeout(this._geneE);
+    this._geneETime = random(100, 200);
+    this._geneE = setTimeout(this.mockInput.bind(this), this._geneETime);
     // 200ms - 800ms 之间
     if (!this._initOK) {
       return;
@@ -555,8 +567,9 @@ class Editor extends React.Component {
       <div>
         <Button
           onClick={() => {
-            clearTimeout(this._genE);
+            clearTimeout(this._geneE);
             console.log(this._state, this._stateErr.length, this._stateErr);
+            console.log(this._syncErr.length, this._syncErr);
           }}
         >
           haha
