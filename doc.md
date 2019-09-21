@@ -8,6 +8,30 @@
 为什么这个 op.lines 这么重要呢？需要查看源代码进行分析，如何改为无 op.lines 或者 op.lines 永远为 0 的程序才是关键，
 如果没有行数概念，可以直接翻译 delta 中的 retain,insert,delete 即可，这里只要保证符合两者要求即可。
 
+# state
+
+因为会出现文本无法 follow,apply 等情况，修改 定时发送 Y 的逻辑中的 Changeset.isIdentity(this.X)
+之后没有出现了。
+
+在一个普通的通信中，socket 收发的时间大概为 100 ms 以内。多为 10-30ms，可能极端的操作问题并没有反映出来。
+
+在此假设之后，通过 状态 来控制整一个文档的更新。
+
+## 服务器
+
+如何保证每一个操作是串行执行呢？
+采用内存类型 queue,将 Ci,Cj,Ck 客户端的操作，依次 follow apply，保证不会出错。
+
+## 客户端
+
+客户端需要维持的是 A,X,Y,delta(E),B
+需要注意的状态是：
+following, sendYing, composing, syncAcking
+初始状态为 null -> init
+这几个都可能导致对应的 A,X,Y 出错。
+考虑到现实 debug 难度，需要将对应的错误状态交集时的状态记录，方便排错。
+通过实际情况，理清各个状态之间，哪个是没有影响的，可以并行的。（应该没有）。
+
 最简单的是：follow ver->current ver
 applyToText 即可。
 使用数组记录（{text, ver, str}）
